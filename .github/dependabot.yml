@@ -7,6 +7,11 @@ updates:
     commit-message:
       prefix: fix
       include: scope
+    ignore:
+      # Stale v2+ tags without a /vN module path resolve as +incompatible
+      # and break the update.
+      - dependency-name: github.com/libp2p/go-libp2p
+        versions: [">= 2.0.0"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
