@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: peershare
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files: [README.md]
+
+checksum:
+  name_template: checksums.txt
+
+# release-please writes the changelog and creates the release; GoReleaser
+# only attaches the binaries to it.
+changelog:
+  disable: true
+
+release:
+  mode: keep-existing
+
+# Pushed to smetroid/homebrew-tap with a deploy key scoped to that repo.
+homebrew_casks:
+  - name: peershare
+    homepage: https://github.com/smetroid/peershare
+    description: Share a directory with peers you name by public key
+    commit_author:
+      name: peershare-release
+      email: 1909699+smetroid@users.noreply.github.com
+    commit_msg_template: "peershare {{ .Tag }}"
+    repository:
+      owner: smetroid
+      name: homebrew-tap
+      branch: main
+      git:
+        url: git@github.com:smetroid/homebrew-tap.git
+        private_key: "{{ .Env.HOMEBREW_TAP_DEPLOY_KEY }}"
+    # The binary is not notarized; without this macOS refuses to run it.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/peershare"]
+          end
