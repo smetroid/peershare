@@ -21,6 +21,10 @@ jobs:
 
   gitleaks:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Lists a pull request's commits to scan.
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
