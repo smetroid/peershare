@@ -26,10 +26,11 @@ func runShare(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("share", flag.ExitOnError)
 	identity := fs.String("identity", defaultIdentityPath(), "private key file (created if missing)")
 	writable := fs.Bool("rw", false, "allow allowed peers to write, rename and delete")
-	var allow, relayAddrs, listen listFlag
+	var allow, relayAddrs, listen, announceAddrs listFlag
 	fs.Var(&allow, "allow", "peer ID allowed to access the share (repeatable, required)")
 	fs.Var(&relayAddrs, "relay", "relay multiaddr ending in /p2p/<id> (repeatable)")
 	fs.Var(&listen, "listen", "libp2p listen multiaddr (repeatable)")
+	fs.Var(&announceAddrs, "announce", "extra multiaddr to put in the ticket, e.g. /dns4/share.example.com/tcp/443/wss (repeatable)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: peershare share [flags] <dir>")
 		fs.PrintDefaults()
@@ -48,6 +49,10 @@ func runShare(ctx context.Context, args []string) error {
 		return err
 	}
 	relays, err := parseRelays(relayAddrs)
+	if err != nil {
+		return err
+	}
+	announce, err := parseAnnounce(announceAddrs)
 	if err != nil {
 		return err
 	}
@@ -74,7 +79,7 @@ func runShare(ctx context.Context, args []string) error {
 	if err := connectRelays(ctx, h, relays); err != nil {
 		return err
 	}
-	addrs := append(h.Addrs(), circuitAddrs(relays)...)
+	addrs := append(append(announce, h.Addrs()...), circuitAddrs(relays)...)
 	ticket, err := encodeTicket(peer.AddrInfo{ID: h.ID(), Addrs: addrs})
 	if err != nil {
 		return err

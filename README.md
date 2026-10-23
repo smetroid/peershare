@@ -55,6 +55,58 @@ fails. The relay has no bandwidth limits, so its ACL only lets peers you
 `-allow` reserve slots on it, and only those reserved peers can be reached
 through it.
 
+## Through Cloudflare Tunnel
+
+If you don't want to open a port, put the share behind a
+[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/).
+The share listens for libp2p over WebSocket on localhost, `cloudflared` publishes
+it as an HTTPS hostname, and peers dial it over `wss` on port 443. Cloudflare
+terminates TLS but only sees libp2p's encrypted stream. You don't need a relay.
+
+```
+co-worker ──wss:443──▶ Cloudflare ◀── cloudflared (outbound) ──▶ 127.0.0.1:4002/ws ── peershare share
+```
+
+One-time setup with a domain on Cloudflare:
+
+```sh
+brew install cloudflared
+cloudflared tunnel login                                  # pick the zone
+cloudflared tunnel create peershare
+cloudflared tunnel route dns peershare share.example.com  # creates the CNAME
+```
+
+Each time you share, run the tunnel and the share:
+
+```sh
+cloudflared tunnel run --url http://localhost:4002 peershare
+
+peershare share -allow <their ID> \
+  -listen /ip4/127.0.0.1/tcp/4002/ws \
+  -announce /dns4/share.example.com/tcp/443/wss \
+  ~/dir
+```
+
+`-announce` adds the public address to the ticket, because the share can't
+discover it itself. The co-worker runs `peershare mount <ticket>` as usual and
+needs no Cloudflare account or `cloudflared`.
+
+For a one-off without a domain, `cloudflared tunnel --url http://localhost:4002`
+prints a random `https://<name>.trycloudflare.com` hostname. Announce it as
+`/dns4/<name>.trycloudflare.com/tcp/443/wss`. The hostname changes every run,
+so you have to send a new ticket each time.
+
+Notes:
+
+- Anyone can open a WebSocket to the hostname. The share then rejects any peer
+  that's not on `-allow`, the same as on any other address.
+- Don't put Cloudflare Access in front of the hostname. The `peershare` client
+  can't complete its login, so the connection would fail.
+- All traffic goes through Cloudflare, which is slower than a direct
+  connection for large transfers. Listening only on `127.0.0.1` also turns off
+  LAN and direct connections. Add the default listen addresses with more
+  `-listen` flags if you want those as well.
+
 ## Security model
 
 - Access is granted per peer ID on the share side. libp2p proves the remote
@@ -78,6 +130,8 @@ The tests run several peers in one process on loopback. They check that:
 - writes to a read-only share are rejected
 - symlinks pointing out of the share are refused
 - a ticket with only relay addresses still connects
+- a share listening on `/ws` is reachable through that address alone, as
+  it is behind Cloudflare Tunnel
 
 CI runs the tests on every push and pull request. The `security` workflow
 also runs on every push and pull request, and weekly:
@@ -132,6 +186,20 @@ connection succeeds, but every request fails and `share` logs
 4. Expected: the mount works over the relay. Running `share` with
    `GOLOG_LOG_LEVEL=p2p-holepunch=debug` shows whether hole punching upgraded
    the connection to a direct one.
+
+### Through Cloudflare Tunnel, on one machine
+
+Uses a quick tunnel, so no domain is needed:
+
+```sh
+cloudflared tunnel --url http://localhost:4002        # note the trycloudflare.com host
+peershare share -identity /tmp/ps/me.key -allow $FRIEND \
+  -listen /ip4/127.0.0.1/tcp/4002/ws -announce /dns4/<host>/tcp/443/wss /tmp/ps/dir
+```
+
+The ticket also includes the local `/ws` address, so mounting it on the same
+machine would skip the tunnel. To be sure the tunnel works, have someone on
+another network mount it.
 
 ### The Homebrew install
 

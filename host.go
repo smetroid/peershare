@@ -55,6 +55,25 @@ func parseRelays(addrs []string) ([]peer.AddrInfo, error) {
 	return relays, nil
 }
 
+// parseAnnounce parses addresses the share is reachable at but can't see
+// itself, such as a Cloudflare Tunnel hostname in front of a /ws listener.
+// The share's peer ID is added when the ticket is used, so it must not be
+// part of the address.
+func parseAnnounce(addrs []string) ([]ma.Multiaddr, error) {
+	var out []ma.Multiaddr
+	for _, a := range addrs {
+		m, err := ma.NewMultiaddr(a)
+		if err != nil {
+			return nil, fmt.Errorf("announce %q: %w", a, err)
+		}
+		if _, err := m.ValueForProtocol(ma.P_P2P); err == nil {
+			return nil, fmt.Errorf("announce %q: leave out /p2p/<id>", a)
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
 // connectRelays fails fast when no relay is reachable. Autorelay then
 // reserves a slot on each and keeps the reservation refreshed.
 func connectRelays(ctx context.Context, h host.Host, relays []peer.AddrInfo) error {

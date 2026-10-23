@@ -181,6 +181,48 @@ func TestShareViaRelay(t *testing.T) {
 	}
 }
 
+// TestShareOverWebSocket covers a share behind an HTTPS reverse proxy such
+// as Cloudflare Tunnel: it listens on /ws and is reached over that address
+// alone.
+func TestShareOverWebSocket(t *testing.T) {
+	sk, err := loadIdentity(filepath.Join(t.TempDir(), "identity.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sharer, err := newPeerHost(sk, []string{"/ip4/127.0.0.1/tcp/0/ws"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sharer.Close() })
+	friend := newTestHost(t, nil)
+	srv, err := serveShare(sharer, shareDir(t), map[peer.ID]bool{friend.ID(): true}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { srv.Close() })
+
+	announce, err := parseAnnounce([]string{sharer.Addrs()[0].String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := mountURL(t, friend, peer.AddrInfo{ID: sharer.ID(), Addrs: announce})
+	if code, body := do(t, http.MethodGet, url+"/hello.txt"); code != 200 || body != "hi" {
+		t.Errorf("GET over /ws = %d %q, want 200 \"hi\"", code, body)
+	}
+}
+
+func TestParseAnnounce(t *testing.T) {
+	if _, err := parseAnnounce([]string{"/dns4/share.example.com/tcp/443/wss"}); err != nil {
+		t.Errorf("valid address: %v", err)
+	}
+	withID := "/dns4/share.example.com/tcp/443/wss/p2p/" + newTestHost(t, nil).ID().String()
+	for _, a := range []string{"share.example.com:443", withID} {
+		if _, err := parseAnnounce([]string{a}); err == nil {
+			t.Errorf("parseAnnounce(%q) succeeded, want error", a)
+		}
+	}
+}
+
 func TestTicketRoundTrip(t *testing.T) {
 	h := newTestHost(t, nil)
 	want := peer.AddrInfo{ID: h.ID(), Addrs: h.Addrs()}
