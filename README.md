@@ -151,6 +151,30 @@ go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 gitleaks git .
 ```
 
+### End to end, with Docker
+
+```sh
+e2e/run.sh                 # relay checks
+e2e/run.sh --cloudflare    # also through a Cloudflare quick tunnel (needs internet)
+KEEP=1 e2e/run.sh          # leave the containers running to poke at them
+```
+
+[`e2e/compose.yaml`](e2e/compose.yaml) puts the share and the mount on two
+separate private networks, each behind its own NAT router (iptables
+masquerade), with a relay on a shared "wan" network between them. The script
+checks that:
+
+- the mount side can't reach the share directly, so the other checks really
+  go through NAT
+- an allowed peer reads the share through the relay
+- writes to a read-only share are rejected
+- a peer not on the allowlist is rejected
+- with `--cloudflare`: a share listening only on a loopback `/ws` address,
+  behind `cloudflared`, is readable through the tunnel alone
+
+CI runs it without `--cloudflare`, so it doesn't depend on Cloudflare being
+up.
+
 ### By hand, on one machine
 
 Use two identity files to act as two people:

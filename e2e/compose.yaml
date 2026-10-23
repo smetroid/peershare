@@ -1,0 +1,79 @@
+# Two peers on separate private networks, each behind its own NAT router,
+# with a relay on the shared "internet" between them. The peers can't reach
+# each other directly, the same as two home or office networks.
+#
+#            wan 10.99.0.0/24 (has internet egress)
+#     ┌──────────────┼──────────────┐
+#  router-a        relay         router-b
+#     │                             │
+#  lan-a 10.99.1.0/24            lan-b 10.99.2.0/24     
+#     │                             │
+#   share (+ cloudflared)         mount
+#
+# Driven by run.sh; containers idle until it execs peershare in them.
+
+x-router: &router
+  build: { context: .., dockerfile: e2e/Dockerfile }
+  image: peershare-e2e
+  cap_add: [NET_ADMIN]
+  sysctls: { net.ipv4.ip_forward: 1 }
+  # Masquerade everything leaving the LAN, as a home router does.
+  command: sh -c 'iptables -t nat -A POSTROUTING -s $$LAN ! -d $$LAN -j MASQUERADE && exec sleep infinity'
+
+x-peer: &peer
+  image: peershare-e2e
+  cap_add: [NET_ADMIN]
+  # Route out through the router instead of Docker's gateway. Docker drops
+  # traffic between its networks, so the router is the only way off the LAN.
+  # (An internal network would also drop the routed traffic.)
+  command: sh -c 'ip route replace default via $$GW && exec sleep infinity'
+
+services:
+  router-a:
+    <<: *router
+    environment: { LAN: 10.99.1.0/24 }
+    networks:
+      wan: { ipv4_address: 10.99.0.2 }
+      lan-a: { ipv4_address: 10.99.1.2 }
+
+  router-b:
+    <<: *router
+    environment: { LAN: 10.99.2.0/24 }
+    networks:
+      wan: { ipv4_address: 10.99.0.3 }
+      lan-b: { ipv4_address: 10.99.2.2 }
+
+  relay:
+    image: peershare-e2e
+    command: sleep infinity
+    networks:
+      wan: { ipv4_address: 10.99.0.10 }
+
+  share:
+    <<: *peer
+    environment: { GW: 10.99.1.2 }
+    networks:
+      lan-a: { ipv4_address: 10.99.1.10 }
+
+  mount:
+    <<: *peer
+    environment: { GW: 10.99.2.2 }
+    networks:
+      lan-b: { ipv4_address: 10.99.2.10 }
+
+  # Quick tunnel in the share's network namespace, so it reaches the share's
+  # 127.0.0.1 listener and goes out through router-a.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: [cloudflare]
+    depends_on: [share]
+    network_mode: service:share
+    command: tunnel --no-autoupdate --url http://localhost:4002
+
+networks:
+  wan:
+    ipam: { config: [{ subnet: 10.99.0.0/24 }] }
+  lan-a:
+    ipam: { config: [{ subnet: 10.99.1.0/24 }] }
+  lan-b:
+    ipam: { config: [{ subnet: 10.99.2.0/24 }] }
