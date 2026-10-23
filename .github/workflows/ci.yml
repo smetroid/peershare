@@ -22,3 +22,12 @@ jobs:
         with:
           version: "~> v2"
           args: check
+
+  # Two peers behind separate NATs, through a relay. The Cloudflare path
+  # (e2e/run.sh --cloudflare) depends on a third-party service, so it's run
+  # by hand.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: e2e/run.sh
