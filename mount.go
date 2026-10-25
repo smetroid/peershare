@@ -12,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 )
 
 func runMount(ctx context.Context, args []string) error {
@@ -49,6 +50,9 @@ func runMount(ctx context.Context, args []string) error {
 	}
 	defer h.Close()
 
+	// Connect only keeps the ticket's addresses for two minutes. Keep them for
+	// good, so a new stream can redial after the connection drops.
+	h.Peerstore().AddAddrs(target.ID, target.Addrs, peerstore.PermanentAddrTTL)
 	if err := h.Connect(ctx, target); err != nil {
 		return fmt.Errorf("connect to %s: %w", target.ID, err)
 	}
