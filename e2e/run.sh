@@ -4,13 +4,22 @@
 # for the topology. Needs Docker; --cloudflare also needs internet access.
 #
 #   e2e/run.sh                 relay checks
+#   e2e/run.sh --reconnect     also check a mount survives a dropped connection
+#                              (adds about 2.5 minutes)
 #   e2e/run.sh --cloudflare    relay checks, then the same through Cloudflare
 #   KEEP=1 e2e/run.sh          leave the containers running for debugging
 set -euo pipefail
 cd "$(dirname "$0")"
 
 cloudflare=false
-[[ ${1:-} == --cloudflare ]] && cloudflare=true
+reconnect=false
+for arg in "$@"; do
+	case $arg in
+	--cloudflare) cloudflare=true ;;
+	--reconnect) reconnect=true ;;
+	*) echo "usage: $0 [--reconnect] [--cloudflare]" >&2; exit 2 ;;
+	esac
+done
 
 dc() { docker compose --progress quiet -p peershare-e2e "$@"; }
 x() { dc exec -T "$@"; }
@@ -94,6 +103,26 @@ if [[ $(get http://127.0.0.1:8485/a.txt || true) == hello ]]; then
 fi
 wait_for share /tmp/share.log 'rejected peer' >/dev/null
 pass "peer not on the allowlist is rejected"
+
+if $reconnect; then
+	# Restart the share so the mount's connection drops, then wait out the
+	# 2 minute TTL libp2p gives addresses it has no live connection for. The
+	# mount must still reach the share from the ticket's addresses.
+	x share pkill peershare
+	start share /tmp/share-2.log share -identity /tmp/share.key -allow "$FRIEND_ID" \
+		-listen /ip4/0.0.0.0/tcp/4001 -relay "/ip4/10.99.0.10/tcp/4001/p2p/$RELAY_ID" /srv/dir
+	wait_for share /tmp/share-2.log 'peershare mount [^ ]+' >/dev/null
+	echo "Waiting for the mount's address entries to expire"
+	sleep 135
+	got=
+	for _ in $(seq 30); do # the share needs a moment to re-reserve its relay slot
+		got=$(get http://127.0.0.1:8484/a.txt || true)
+		[[ $got == hello ]] && break
+		sleep 2
+	done
+	[[ $got == hello ]] || fail "read after the connection dropped and addresses expired"
+	pass "mount reconnects from the ticket after its connection drops"
+fi
 
 $cloudflare || exit 0
 
