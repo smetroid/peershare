@@ -1,0 +1,6 @@
+apiVersion: v2
+name: peershare-relay
+description: libp2p circuit relay for peershare, for peers behind NAT
+type: application
+version: 0.1.0
+appVersion: "0.2.0"

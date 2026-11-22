@@ -1,0 +1,26 @@
+image:
+  repository: ghcr.io/smetroid/peershare
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Peer IDs allowed to reserve a relay slot, i.e. your sharers
+# (`peershare id`). Required.
+allow: []
+
+# The relay's identity key lives here. Its peer ID is part of every ticket,
+# so keep it across restarts.
+persistence:
+  size: 16Mi
+  storageClassName: ""
+
+# One port serves TCP and QUIC (UDP). Sharers and mounters must reach both.
+service:
+  type: LoadBalancer
+  port: 4001
+  annotations: {}
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
