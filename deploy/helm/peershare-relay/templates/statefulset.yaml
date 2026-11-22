@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "relay.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ .Release.Name }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "relay.labels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "relay.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: relay
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - relay
+            - -identity=/data/identity.key
+            - -listen=/ip4/0.0.0.0/tcp/{{ .Values.service.port }}
+            - -listen=/ip4/0.0.0.0/udp/{{ .Values.service.port }}/quic-v1
+            {{- if not .Values.allow }}{{ fail "set allow to at least one sharer peer ID" }}{{ end }}
+            {{- range .Values.allow }}
+            - -allow={{ . }}
+            {{- end }}
+          ports:
+            - {name: tcp, containerPort: {{ .Values.service.port }}, protocol: TCP}
+            - {name: quic, containerPort: {{ .Values.service.port }}, protocol: UDP}
+          readinessProbe:
+            tcpSocket: {port: tcp}
+          livenessProbe:
+            tcpSocket: {port: tcp}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+          {{- with .Values.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.persistence.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}

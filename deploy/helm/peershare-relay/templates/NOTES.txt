@@ -1,0 +1,8 @@
+Find the relay's peer ID (it stays the same across restarts):
+  kubectl logs statefulset/{{ .Release.Name }} | grep p2p
+
+Swap the pod IP for the Service's public address:
+  kubectl get svc {{ .Release.Name }}
+  peershare share -relay /ip4/<public-ip>/tcp/{{ .Values.service.port }}/p2p/<relay ID> ...
+
+TCP and UDP {{ .Values.service.port }} must both be reachable from outside.
