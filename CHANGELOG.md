@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/smetroid/peershare/compare/v0.2.1...v0.3.0) (2026-11-22)
+
+
+### Features
+
+* **relay:** add Helm chart and publish the image to ghcr ([#10](https://github.com/smetroid/peershare/issues/10)) ([da6bc8c](https://github.com/smetroid/peershare/commit/da6bc8c13502b13441bae39affc8716ad96394a5))
+
+
+### Bug Fixes
+
+* **deps:** Bump github.com/libp2p/go-libp2p from 0.51.0 to 0.52.0 ([#8](https://github.com/smetroid/peershare/issues/8)) ([4e91345](https://github.com/smetroid/peershare/commit/4e9134590a12843b45b3628cfa5e959bb65ade8d))
+
 ## [0.2.1](https://github.com/smetroid/peershare/compare/v0.2.0...v0.2.1) (2026-11-09)
 
 
