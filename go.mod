@@ -7,7 +7,7 @@ toolchain go1.26.10
 require (
 	github.com/libp2p/go-libp2p v0.52.0
 	github.com/multiformats/go-multiaddr v0.16.1
-	golang.org/x/net v0.62.0
+	golang.org/x/net v0.63.0
 )
 
 require (
